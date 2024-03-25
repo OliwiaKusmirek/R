@@ -1,0 +1,138 @@
+---
+title: "Metody klasyfikacji"
+author:
+  name: Oliwia Kuśmirek
+  affiliation: Politechnika Krakowska
+output:
+  html_document:
+    df_print: paged
+---
+
+
+```{r}
+library(tidyverse)
+library(caret)
+library(ggfortify)
+library(pROC)
+```
+
+
+```{r}
+bank <- readr::read_csv('banknote.csv', col_names = c('wariancja', 'skosnosc', 'kurtoza', 'entropia', 'autentycznosc'))
+```
+```{r}
+head(bank)
+```
+
+At the moment, we see that X1-X4 are individual features of the banknote, helping to determine whether the banknote is counterfeit or not, while X5 is the column where it is classified whether the banknote is counterfeit.
+
+```{r}
+summary(bank)
+```
+The variance in the dataset ranges from -7.04 to 6.82, with a median close to zero, suggesting a symmetric distribution. A small mean indicates slight asymmetry. Skewness exhibits significant variation from -13.77 to 12.95, with both the median and mean indicating a right-skewed distribution. Kurtosis, ranging from -5.29 to 17.93, suggests heavy-tailed distribution, possibly indicating the presence of extreme values. Entropy, ranging from -8.55 to 2.45 with a negative mean, indicates left-skewed distribution. The authenticity variable, taking values 0 or 1, indicates that approximately 44% of banknotes are labeled as authentic.
+
+We will check if our classes are balanced.
+```{r}
+
+ggplot(bank, aes(x = factor(autentycznosc))) +
+  geom_bar(stat = "count", fill = "blue")
+```
+
+
+Yes, that's correct. So, in the dataset, we have two classes, almost balanced.
+```{r}
+X <- bank[, c('wariancja', 'skosnosc', 'kurtoza', 'entropia')]
+y <- bank$autentycznosc
+```
+Now we will split the data into training and testing sets.
+```{r}
+set.seed(42)
+```
+```{r}
+split_index <- sample(1:nrow(bank), 0.8 * nrow(bank))
+treningowe <- bank[split_index, ]
+testowe <- bank[-split_index, ]
+```
+
+We are checking the size/count.
+```{r}
+table(treningowe$autentycznosc)
+```
+```{r}
+table(testowe$autentycznosc)
+```
+```{r}
+summary(treningowe)
+```
+
+The variance values suggest significant data spread, indicating that the values in the dataset are quite dispersed. The maximum variance value of 6.0919 indicates substantial variability.
+
+Skewness, indicating the asymmetry of the data distribution, has positive values. This suggests that the data is shifted towards higher values, possibly due to the presence of outliers at higher levels.
+
+We are building a logistic regression model.
+
+The kurtosis value is relatively high, indicating the presence of heavy tails in the data distribution. This may suggest the existence of significant outlier values.
+
+The negative entropy value indicates some structure or order in the data, indicating a degree of predictability or uniformity.
+
+The authenticity variable appears to be diverse, ranging between 0 and 1. An authenticity mean of approximately 0.45 suggests differences in the levels of authenticity in the data.
+```{r}
+logistic_model <- glm(autentycznosc ~ wariancja + skosnosc + kurtoza + entropia, data = treningowe, family = binomial)
+summary(logistic_model)
+```
+A warning occurred:
+Warning: glm.fit: fitted probabilities numerically 0 or 1 occurred.
+Our dependent variable - label - V5 takes only values of 1 or 0. The warning occurred because logistic regression is supposed to predict probabilities, not specific values.
+
+To ensure that the model is not overfitted to the training data, it's important to assess its performance on the test set and compare those results with the performance on the training data. There are several evaluation methods, such as making predictions on the test set, creating a confusion matrix, and calculating the ROC curve and AUC values.
+
+```{r}
+predictions <- predict(logistic_model, newdata = testowe, type = "response")
+predicted_labels <- ifelse(predictions > 0.5, 1, 0)
+table(predicted_labels, testowe$autentycznosc)
+```
+
+```{r}
+accuracy <- sum(predicted_labels == testowe$autentycznosc) / nrow(testowe)
+conf_matrix <- table(Obserwowane = testowe$autentycznosc, Przewidziane = predicted_labels)
+```
+
+```{r}
+print(paste("Accuracy:", accuracy))
+print("Confusion Matrix:")
+print(conf_matrix)
+```
+Summarizing the logistic regression model we evaluated, it achieved a very impressive accuracy of 98.91%. This means that almost 99% of observations were correctly classified.
+
+Moving to the confusion matrix:
+True Negative (TN) - The number of truly negative cases (fake banknotes correctly identified) is 153.
+False Positive (FP) - There are only 2 cases of false positive (real banknotes incorrectly classified as fake).
+False Negative (FN) - There is only 1 case of false negative (fake banknote incorrectly classified as real).
+True Positive (TP) - The number of truly positive cases (real banknotes correctly identified) is 119.
+
+The model performs excellently in identifying fake banknotes, which is crucial to prevent them from entering circulation. Errors in classifying real banknotes are minimal, with only 2 false positive cases.
+
+Based on the available data, our logistic regression model used for banknote classification is a great tool. However, it's essential to regularly check this model to ensure it performs well with other datasets. It demonstrates high precision and effectiveness in identifying fake banknotes.
+
+```{r}
+m_cm
+```
+Sensitivity: 0.9745 - This means that approximately 97% of authentic banknotes were effectively identified by the model.
+
+Specificity: 0.9932 - It informs us that approximately 99% of fake banknotes were correctly classified by the model.
+```{r}
+predictions <- predict(logistic_model, newdata = testowe, type = "response")
+
+roc_curve <- roc(testowe$autentycznosc, predictions)
+
+plot(roc_curve, main = "Krzywa ROC", col = "blue", lwd = 2)
+abline(a = 0, b = 1, lty = 2, col = "red")  # Linia odniesienia
+
+auc_value <- auc(roc_curve)
+cat("Obszar pod krzywą (AUC):", auc_value, "\n")
+```
+The ROC curve illustrating the model's performance shows excellent separation between classes. The diagonal line, representing the random model, serves as a reference point. The further the ROC curve is from this line, the better the model's ability to effectively differentiate between classes.
+
+The AUC value is 0.9996, which is a high score. This indicates that the model has an excellent ability to distinguish between authentic and counterfeit banknotes. AUC value close to 1 confirms the very high effectiveness of the model.
+
+In summary, the logistic regression model demonstrates high effectiveness in classifying the authenticity of banknotes. Both the confusion matrix and the AUC value confirm that this model excels in predicting the authenticity of banknotes based on the available features.
